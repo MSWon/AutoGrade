@@ -1,52 +1,83 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Mar 20 20:26:28 2019
+Created on Wed Apr  3 20:31:56 2019
 
 @author: jbk48
 """
 
 import os
+import re
 import subprocess
 import pandas as pd
 import numpy as np
+import pickle
 
-base_dir = os.getcwd()
+student_df = pd.read_csv("student_list.csv", sep =",")
+
+## 안낸 사람 점수 0점으로 ##
+student_df.loc[student_df["제출여부"] == "N", "점수"] = -1
+
 
 with open("testcase.txt" , "r") as f:
     testcase = f.readlines()
 
+with open("testanwser.txt" , "r") as f:
+    answer = f.readlines()
+
 testcase = "".join(testcase)
+answer = "".join(answer)
 
-os.chdir("./assignment")
-hw_dir = os.getcwd()
-
-folder = os.listdir()
-
-student_grade = {}
-
-for student in folder:
-
-    os.chdir("{}\\{}\\{}".format(hw_dir, student, student))
+if(os.path.exists("./filename_list.pkl")):
+    with open("./filename_list.pkl", 'rb') as f:
+        filename_list = pickle.load(f)
+else:
+    filename_list = os.listdir("./datastructure_HW")
+    with open("./filename_list.pkl",'wb') as f:
+        pickle.dump(filename_list , f)
     
-    subprocess.call("g++ main.cpp",shell=True)
-    out = subprocess.check_output("a.exe", input = testcase ,shell = True, encoding = "utf-8") 
+##filename_list.index("2016310526_20190330011420_368471.c")
+
+os.chdir("./datastructure_HW")
+
+exception_list = [] ## 에러나는거 리스
+i = 0
+
+input_filename = exception_list[0]
+
+for input_filename in filename_list:
     
-    pred_answer = [int(x) for x in out.split("\n") if x != ""] ## 코드로부터 나온 답
-    real_answer = [15, 7, 10] ## 실제 답
+    student_id = input_filename[:10]
+    
+    fileName =  student_id
+    compileStr = "gcc -o ./" + fileName + " ./" + input_filename
+    call_value = subprocess.call(compileStr, shell=True)
+    if(call_value == 1):
+        print("Error for {}, index {}".format(fileName, i))
+        i += 1
+        exception_list.append(input_filename)
+        continue
+    else:
+        try:
+            out = subprocess.check_output(fileName, input = testcase, shell = True, encoding = "utf-8")
+        except:
+            print("Error for {}, index {}".format(fileName, i))
+            i += 1
+            exception_list.append(input_filename)
+            continue
+        
+    pred_answer = re.sub("[a-z| A-Z|'\n]", "", out)
+    real_answer = re.sub("[a-z| A-Z|'\n]", "", answer)
     
     if(pred_answer == real_answer):
-        student_grade[student] = 1  ## PASS
+        score = 10
     else:
-        student_grade[student] = 0  ## FAIL
-
-
-std_id = [id_ for id_ in student_grade]
-std_grade = [student_grade[id_] for id_ in student_grade]
-
-
-result = pd.DataFrame(np.array([std_id, std_grade]).T , columns =["학번","점수"] ,index = None)
-os.chdir(base_dir)
-result.to_csv("assignment_1.csv" , index = False)
-
-
+        score = 0
+     
+    student_df.loc[student_df["학번"] == int(student_id), "점수"] = score
     
+    print("Success for {}, index {}".format(fileName, i))
+    student_df.to_csv("student_score.csv", index = False)
+    with open("./exception_list.pkl",'wb') as f:
+        pickle.dump(exception_list , f)
+    
+    i += 1
